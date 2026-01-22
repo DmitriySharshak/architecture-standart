@@ -1,0 +1,48 @@
+@startuml C4_Container
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+
+title Диаграмма контейнеров: Система "Онлайн-депозиты" банка "Стандарт"
+
+Person(client, "Cуществующий клиент", "Клиент банка, который хочет открыть депозит через интернет-банк")
+Person(newClient, "Новый клиент", "Клиент, который хочет открыть депозит через сайт банка")
+Person(operator, "Оператор кол-центра", "Сотрудник кол-центра, который обрабатывает заявки и консультирует клиентов")
+Person(manager, "Менеджер бэк-офиса", "Сотрудник депозитного отдела, который проверяет и подтверждает заявки на открытие депозитов")
+
+System_Boundary(sys, "Зона цифровой трансформации") {
+    Container(internatBank, "Интернет-Банк", "ASP.NET MVC 4.5 + React.js", "Предоставляет интерфейс для открытия депозитов существующим клиентам")
+    Container(site, "Веб-сайт банка", "PHP + React.js", "Публичная информация и форма заявки для новых клиентов")
+    Container(rate, "Сервис расчёта ставок", ".NET Core Web API", "Рассчитывает персонализированные ставки на основе данных клиента и правил")
+    ContainerDb(db, "База данных ставок", "MS SQL Server", "Хранит кэш данных клиентов, правила расчёта, историю запросов")
+    Container(worker, "Обработка очереди заявок", ".NET Core/Java Service", "Асинхронная обработка заявок из очереди")
+    ContainerQueue(queue, "Брокер сообщений", "Kafka", "Асинхронная коммуникация между компонентами")
+    Container(gateway, "API Gateway", "Nginx", "Маршрутизация, аутентификация")
+}
+
+System_Boundary(parent, "Существующие системы") {
+    Container(abc, "АБС", "Delphi Client + Oracle DB", "Автоматизированная банковская система, ядро банка")
+    Container(api, "API-адаптер АБС", "Java Spring Boot", "Безопасный интерфейс для интеграции с АБС")
+    Container(call, "Система кол-центра", "React + Java + PostgreSQL", "Платформа для работы операторов кол-центра")    
+}
+
+' Основные связи для Use Cases
+Rel(client, gateway, "HTTPS/TLS", "API")
+Rel(gateway, internatBank, "HTTP", "8080")
+Rel(newClient, gateway, "HTTPS/TLS", "API")
+Rel(gateway, site, "HTTP", "80")
+Rel(operator, call, "Использует", "Веб-интерфейс")
+Rel(manager, abc, "Использует", "Delphi-клиент")
+
+' Внутренние интеграции системы
+Rel(internatBank, rate, "REST API (HTTPS)", "Получение персонализированных ставок")
+Rel(internatBank, queue, "Kafka Protocol", "Помещает событие 'Заявка создана'")
+Rel(worker, queue, "Kafka Protocol", "Слушает очередь")
+Rel(worker, api, "REST API (HTTPS)", "Вызов метода 'Создать заявку в АБС'")
+Rel(api, abc, "Внутренний API", "Интеграция через API")
+
+' Интеграции с унаследованными системами
+Rel(rate, abc, "Запросы на получение данных", "Получение данных клиента (баланс, история)")
+Rel(site, call, "REST API (HTTPS)", "Передача заявки нового клиента")
+Rel(call, api, "REST API (HTTPS)", "Создание предварительной заявки в АБС")
+
+@enduml
