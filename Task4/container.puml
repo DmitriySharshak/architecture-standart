@@ -1,0 +1,36 @@
+@startuml C4_Container
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title Диаграмма контейнеров: Распространение ставок по депозитам для кол-центров
+
+Person(operatorCall, "Оператор кол-центра банка", "Сотрудник внутреннего кол-центра консультирует клиентов по телефону")
+Person(operatorPartner, "Оператор партнёрского кол-центра", "Сотрудник внешнего кол-центра использует файлы со ставками")
+
+System_Boundary(core_boundary, "Ядро управления ставками") {
+    Container(service_rates, "Сервис ставок", ".NET Core/Web API", "Основной сервис для работы со ставками") 
+    Container(file_processor, "Файловый процессор", ".NET Core", "Генерирует файлы для партнёров") 
+    
+    ContainerQueue(message_queue, "Брокер сообщений", "RabbitMQ", "Очередь для событий об изменении ставок")
+    Container(sftp_server, "SFTP сервер", "OpenSSH SFTP", "Файловый сервер для обмена с партнёром")
+}
+
+System_Boundary(cc_boundary, "Внутренний кол-центр банка") {
+    Container(cc_system, "Система кол-центра", "Java Spring Boot + React", "Основная система обработки звонков") 
+    ContainerDb(cc_сache, "Кэширование", "Redis/Postgres", "Локальный кэш") 
+}
+
+System_Boundary(partner_boundary, "Партнёрский кол-центр (внешний)") {
+    Container(partner_system, "Система партнёрского КЦ", "Проприетарная система", "Внешняя CRM система партнёра")
+}
+
+Rel(service_rates, message_queue, "Публикация", "Kafka", "События по ставкам")
+
+Rel(operatorCall, cc_system, "Консультирует клиентов", "Web UI", "Использует ставки в работе")
+Rel(cc_system, service_rates, "Запрос актуальных ставок", "REST/HTTPS", "Запрос актуальных ставок")
+Rel(cc_system, cc_сache, "Кеширование на 5 мин", "TCP/HTTP", "Обновление/ чтение кэша")
+Rel(file_processor, service_rates, "Запрос данных для экспорта", "REST/HTTPS", "Запрос данных для экспорта")
+Rel(file_processor, sftp_server, "Загрузка файла", "SFTP/SSH", "Передача зашифрованного файла каждые 15 мин")
+Rel(partner_system, sftp_server, "Скачивание файла по расписанию", "SFTP", "Каждые 15-30 минут")
+Rel(operatorPartner, partner_system, "Использование ставок", "Desktop UI", "Консультации с актуальными ставками")
+
+@enduml
